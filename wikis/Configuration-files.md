@@ -1,0 +1,797 @@
+# WARNING: most of the information in this page is outdated and should be checked
+
+When using the command line to run _tkgeometry_ or _tkmaterial_, the configuration files describing the geometry, the module settings and the involved materials of a specific tracker model are key. They allow the user to customise and fine-tune the model until it fits a given set of requirements, or to compare and contrast different options when modelling tracker properties.
+
+The granularity of these options goes from fairly coarse to fairly fine. It is possible to change the number of barrels or endcaps, or the number of layers and discs per barrel and endcap. The size of a barrel or endcap, or the distance between barrels and endcaps can be modified. The number of strips or segments on a module can be adjusted by layer, by disc or by ring, as can its type. Finally, the list and the amount of materials needs to be specified by module type, by service or support structure category and by classifying it as a local or as a travelling component.
+
+All of these options are bundled in the configuration files. The geometry configuration file describes the large-scale structure of the tracker. The settings file looks at layout variations for differents types of modules. And the material file assigns a mixture of physical components - and therefore weight - to the various available volume categories.
+
+These first three are written (or modified) by the user. There is a fourth, called _mattab.list_, that is part of the application. This is simply a global list of all available materials.
+
+_All configuration files are case sensitive._ They support both C-style and shell-style comments starting with '//' and '#', respectively. As expected, everything after the comment sign is ignored until the end of the line is reached.
+
+
+---
+
+
+[Down to geometry configuration file](ConfigFilesOverview#The_Geometry_Configuration_File.md)
+
+[Down to settings file](ConfigFilesOverview#The_Settings_File.md)
+
+[Down to material file](ConfigFilesOverview#The_Material_File.md)
+
+[Down to global material list](ConfigFilesOverview#The_Global_Material_List.md)
+
+
+---
+
+
+---
+
+
+# The Geometry Configuration File
+
+Geometry configuration files are structured as a series of blocks. Each of these starts with one of a list of keywords indicating its function and, in some cases, a name tag. The block contents are enclosed in curly braces. Numeric values indicating sizes are in _mm_ unless specified explicitly.
+
+_As a rule, barrel, layer or disc indices start at 1._
+
+## _Tracker_ Block
+
+The tracker block must be declared before all other components. It lists a number of global parameters and geometry settings of the overall tracker layout. There is exactly one such block in a geometry configuration file - no more, no less. Generally speaking, it looks something like this:
+
+Tracker _trackername_ {
+
+> zError = _value_;
+
+> smallDelta = _value_;
+
+> bigDelta = _value_;
+
+> overlap = _value_;
+
+> etaCut = _value_;
+
+> ptCost = _value_;
+
+> stripCost = _value_;
+
+> ptPower = _value_;
+
+> stripPower = _value_;
+
+}
+
+Whitespace is usually ignored, semicolons and curly braces are used as delimiters for parsing.
+
+### Parameters
+
+**_trackername_**: This is the name that will be given to the entire layout. It may also be used to name output (directories or files) in some cases.
+
+**zError**: The range of z+ around the origin where a collision is most likely to occur. This value has an influence on how the modules in a layer or disc are laid out: specifically, with respect to overlap.
+
+**smallDelta**: This describes the half the distance in Rho of two adjacent modules on the same rod. Namely, the _centre-to-centre_ distance of the two. Since this is a global default value for the entire tracker, it needs to be chosen in a way that prevents collisions between double-sided modules (which have another customisable distance between their two sensor surfaces). A re-declaration of this value in a _Barrel_ block for a specific layer will override the default for that layer. (Endcap solution pending...)
+
+**bigDelta**: similar to _smallDelta_, this gives half the centre-to-centre distance of two rods in the same layer. The value in the _Tracker_ block is a global default that can be overridden by a re-declaration for a specific layer in one of the _Barrel_ blocks. (Endcap solution pending...)
+
+**overlap**: The minimum overlap in z for two adjacent modules.
+
+**etaCut**: The eta range that should be covered by the sensor surfaces. Modules created outside etaCut are discarded in the final layout.
+
+**ptCost**: The estimated cost of a _sqare cm_ of pt module, in _CHF_.
+
+**stripCost**: The estimated cost of a _sqare cm_ of rphi strip module, in _CHF_.
+
+**ptPower**: The estimated power consumption _in mW_ for a single channel on a pt module.
+
+**stripPower**: The estimaded power consumption _in mW_ for a single cannel on a rphi strip module.
+
+
+---
+
+
+## _Barrel_ Block
+
+A Barrel block bundles a number of parameters related to how the layer geometry should look. It says next to nothing definitive about the modules in them. Anything apart from their surface aspect ratio, their number along a rod and some options that help the layer building algorithms optimise their placement is left to the settings file. What the barrel block mainly does is define the dimensions of the barrel itself and give some information about positioning the layers within.
+
+Barrel blocks may appear _after_ the tracker block _in any order_. There must be _at least one_, but there is _no upper limit_. The barrels that these blocks describe are built up in the order of the blocks as they appear in the configuration file. This order is completely up to the user - as is the responsibility to make sure they more or less fit together.
+
+_tkgeometry_ supports various types of layers. The standard one goes across z=0 and extends to the same length into z+ and z-. Short layers that lie entirely to one side of z=0 are also possible, as well as declaring a layer _stacked_, i.e. duplicating it at a radius very close to that of the original to obtain a layer pair. All of these things can be combined to cover a range of layouts.
+
+The application uses default values for any optional parameters that are not specified explicitly.
+
+A _Barrel_ block more or less looks like this:
+
+Barrel _barrelname_ {
+
+> //mandatory
+
+> nLayers = _value_;
+
+> nModules = _value_;
+
+> innerRadius = _value_;
+
+> outerRadius = _value_;
+
+> //optional (selection)
+
+> aspectRatio = _value_;
+
+> minimumZ = _value_;
+
+> phiSegments = _value_;
+
+> smallDelta`[`_layerindex_`]` = _value_;
+
+> option = _layerindex_/Stacked-_displacement_;
+
+> directive = _layerindex_/_constraint_;
+
+}
+
+### Mandatory Parameters
+
+**_barrelname_**: The name of the barrel. Can be any alphanumeric string. Mostly to identify individual barrels to the user.
+
+**nLayers**: The number of layers in the barrel. The first and last of them are built up around _innerRadius_ and _outerRadius_, respectively. The rest is distributed at equal intervals in between, taking into account constraints from directives and other options.
+
+**nModules**: The number of modules in z+ on a single rod. In other words, half the number of modules across the full length of a layer.
+
+**innerRadius**: The minimum radius of the barrel and the average radius of the first layer.
+
+**outerRadius**: The maximum radius of the barrel and the average radius of the last layer.
+
+### Optional Parameters
+
+**aspectRatio**: This defines the shape and size of a module since the diameter of a round wafer is always the same. The _default is 1.0_, i.e. square modules.
+
+**minimumZ**: If this parameter is given as anything greater than zero, it means that the barrel layers are short and don't cross z=0. The given value then indicates the _starting point of a rod_. The number of modules given in mandatory parameter _nModules_ is then placed from there on outwards (in z). A mirror image of the layer is later built up in z-. If the parameter is omitted, the application assumes a standard layer crossing z=0 and places the first module on a rod around the origin, covering both z+ and z- outward from there.
+
+**phiSegments**: The number of symmetric segments that make up a full circle for a layer cylinder. Note that this is a _barrel-wide_ division - the individual layers are split up according to the same rule so that the entire barrel comes apart in wedges of equal size. The _default is 4_.
+
+**smallDelta**: If defined, this parameter overrides the global value from the _Tracker_ block for the layer given by _layerindex_.
+
+**bigDelta**: Similar to _smallDelta_, this overrides the global value from the _Tracker_ block for the layer given by _layerindex_.
+
+**size**: This defines the surface area of a module if the application should not simply use the entire wafer to create it. The combination of _aspectRatio_ and this parameter completely describes shape and size of a module in that case, while module size is implied by the size of the wafer in the standard one.
+
+**option**: Currently, the only supported option is _Stacked_. This causes a layer to be _duplicated_ at a short radial distance _displacement_ from the original, creating a _layer pair_. As an example, if the barrel has four layers and layer 3 is declared as stacked, the result will be a total of five layers, one of which is a copy of layer 3. As for their placement, layer 1 will be at _innerRadius_, layer 4 at _outerRadius_, layer 2 and _two copies_ of layer 3 in between: layer 2 at 1/3 of the radial range and the copies of layer 3 _at and below_ 2/3 of the radial range.
+
+**Please note** that the application only accepts _negative_ values for the displacement of the copy, i.e. the copy will _always_ be created _below_ the original. Therefore, special care needs to be taken if the first layer of the innermost barrel is declared as _Stacked_: collisions of the resulting layer pair with the pixel detector need to be avoided.
+
+**directive**: Directives are declared using a syntax of **_layerindex_/_constraint_** and give indications on where the radius of the specified layer should ideally be. The _constraint_ part of the directive can be either a _number_ or one of the letters **F**, **S**, **E**, or **A**. If it is a number, the specified layer is built at that radius, no questions asked. The letters have the following meaning:
+  * **F**: Fixed. The radius of the layer is calculated from the number of layers and the radius range. It is not adjusted afterwards - even though an odd number of rods will cause a collision between the first and the last rod. (They'll end up on the same side with respect to the average layer radius.)
+  * **S**: Shrink. If the number of rods that would fit into the calculated radius is an odd number, one rod is _removed_ and the radius adjusted to guarantee complete sensor coverage.
+  * **E**: Enlarge. If the number of rods that would fit into the calculated radius is an odd number, one rod is _added_ and the radius adjusted to guarantee complete sensor coverage.
+  * **A**: Auto. If the number of rods that would fit into the calculated radius is an uneven number, the results of removing a rod and adding one (i.e. of shrinking and enlarging the radius) are compared. The variant that is more conservative with respect to sensor covearge wins.
+
+The default directive for all layers is **A**.
+
+
+---
+
+
+## _Endcap_ Block
+
+Like the _Barrel_ block, an _Endcap_ block bundles a number of parameters related to how the disc geometry should look while leaving most module specifics to the settings file. It defines the dimensions of the endcap itself and gives a few pointers towards how to distribute the modules within a disc.
+
+Also like the _Barrel_ blocks, endcaps can be declared _in any order_ as long as the declaration appears after the _Tracker_ block. There is _no upper limit_ to the number of endcaps, but they're _not mandatory_ either: if none is defined, the application will simply produce a _barrel-only_ layout. Once again, their order in the configuration file and the responsibility to make them fit together is entirely up to the user.
+
+What is declared in the _Endcap_ block is actually the z+ side of the endcap - the z- side is a mirror image of it. A disc is further subdivided into rings and then into modules. The number of rings is not given explicitly but computed internally from the size of the disc and the size of the modules. Unlike the barrel, endcap discs can consist of more than one type of module, and often do: if, say, ring 2 is defined as being of type _stereo_ (the rest of the rings being of type _rphi_, typically), then it is double-sided in _every_ disc of the endcap.
+
+An index for a parameter first and foremost names _a ring, not a disc_ for just this reason. The indexed property then applies across all discs for that particular ring. Parameters given for ring indices that would place the ring outside the disc are ignored.
+
+As above, the application uses default values for any optional parameters that are not specified explicitly.
+
+An _Endcap_ block more or less looks like this:
+
+Endcap _endcapname_ {
+
+> //mandatory
+
+> nDisks = _value_;
+
+> innerRadius = _value_;
+> _**or**_
+> innerEta = _value_;
+
+> outerRadius = _value_;
+
+> minimumZ = _value_;
+> _**or**_
+> barrelGap = _value_;
+
+> maximumZ = _value_;
+
+> diskParity = _value_;
+
+> //optional
+
+> aspectRatio = _value_;
+
+> phiSegments = _value_;
+
+> shape = _wedge_ || _rectangular_;
+
+> directive = _rule_;
+
+}
+
+### Mandatory Parameters
+
+**_endcapname_**: The name of the endcap pair. Can be any alphanumeric string. Mostly to identify individual endcap pairs to the user.
+
+**nDisks**: The number of discs _in z+_. The total number of discs in both endcaps will be twice this number.
+
+**innerRadius**: The minimum radius of the endcap and the smallest radius of the first ring. Mutually exclusive with _innerEta_.
+
+**innerEta**: The eta of a hypothetical track that hits the lower left corner of the endcap. Mutually exclusive with _innerRadius_.
+
+**outerRadius**: The maximum radius of the endcap and the greatest radius of the last ring.
+
+**minimumZ**: The leftmost z of the z+ endcap. Mutually exclusive with _barrelGap_.
+
+**barrelGap**: The distance between the right-hand end of the barrel and the left-hand end of the endcap. Mutually exclusive with _minimumZ_.
+
+**maximumZ**: The rightmost z of the z+ endcap.
+
+**diskParity**: This parameter indicates whether the first ring in each disc should be shifted towards z=0 or away from it. The value is either **1** or **-1**: the first of these moves the ring towards z=0, the other one moves it away.
+
+### Optional Parameters
+
+**aspectRatio**: This defines the shape and size of a module in combination since the diameter of a round wafer is always the same. The _default is 1.0_, i.e. same height and width. Mutually exclusive with _shape = wedge_.
+
+**phiSegments**: The number of symmetric segments that make up a full disc circle. Note that this is an _endcap-wide_ division - the individual rings are split up according to the same rule so that the entire endcap comes apart in wedges of equal size. The _default is 4_.
+
+**shape**: Using one of the two keywords _wedge_ and _rectangular_, this is another fundamental parameter for the module shape. _shape = wedge_ is mutually exclusive with _aspectRatio_
+
+**directive**: In a first approximation, the number of modules around a ring is calculated automatically. Directives change this unknown number by a given number of modules _for every segment in phi_. The number of modules can be either increased (+) or decreased (-). The sintax for a directive is of the form _ringNr_(+|-)_moduleChangePerSegment_ - so a rule of _5+2_ would mean that two modules are added to the calculated number in every segment of ring five.
+
+**removeRings**: This parameter allows the user to remove some of the rings from selected discs after the overall endcap layout has been created. The rule syntax is of the form D _number_ R _number_ (+|-) - so a rule stating _D1R4+_ would remove remove the fourth ring and all those above it from disc one. (A rule of _D1R4-_ would remove the fourth ring and all those below.)
+
+### Unimplemented
+
+**smallDelta`[`_ringindex_`]`**: Once implemented, this will have an effect similar to that of _smallDelta`[`_layerindex_`]`_ in the _Barrel_ blocks.
+
+**bigDelta`[`_ringindex_`]`**: Once implemented, this will have an effect similar to that of _bigDelta`[`_layerindex_`]`_ in the _Barrel_ blocks.
+
+
+---
+
+
+## _Support_ Block
+
+Support structures and services around the modules are, for the most part, placed automatically - all of these are outside the overall layer and disc volumes. However, one of the application features allows users to define their own additional barrel supports within the length of the layers. The position of those needs to be declared in a _Support_ block.
+
+The _Support_ block is optional: there is either _none or exactly one_.
+
+An entry in the _Support_ block takes an optional barrel index defining the dimensions of the support in more detail. If _barrelindex_ is not specified, the structure reaches across all layers from above the first of the first barrel to below the last of the last barrel. If there is an index, the supports structure only extends across the given barrel. Barrels are numbered internally based on the radius of their layers, _not_ in the order that they are specified in the configuration file.
+
+If a support is placed beyond the end of the barrels, it is ignored.
+
+Support {
+
+> midZ = _value_;
+
+> midZ`[`_barrelindex_`]` = _value_;
+
+> ...
+
+}
+
+### Parameters
+
+**midZ**: This value indicates the position of a user-defined support structure in z+. A mirror image of the structure in z- will be created in addition unless the support is placed in z=0 - which is not recommended because the material budget estimate will be terrible.
+
+## _Pixel_ Block
+
+The _Pixel_ block is optional, just like the _Support_ block. If given, it describes - in general terms - a pixel detector sitting inside the tracker. The associated materials will have an impact on the analysis of some of the tracker properties. The _Pixel_ block in the geometry file only describes the 3D layout, though, much the same as the _Barrel_ and _Endcap_ block do for the tracker.
+
+Internally, the pixel detector is made up of the same types of objects as the tracker around it. So almost all of the parameters are directly copied from those that are possible for the _Tracker_, _Barrel_ and _Endcap_ blocks. Unless otherwise noted, they use the same defaults as well.
+
+A pixel detector is defined as having _exactly one_ barrel and _a maximum of one_ pair of endcaps. It also uses _rectangular modules_ for _both_. The parameters that make up a _Pixel_ block are listed below:
+
+Pixel {
+
+> nLayers = _value_;
+
+> nModules = _value_;
+
+> nDisks = _value_;
+
+> etaCut = _value_;
+
+> innerRadius = _value_;
+
+> outerRadius = _value_;
+
+> phiSegments = _value_;
+
+> barrelGap = _value_;
+
+> maximumZ = _value_;
+
+> diskParity = _value_;
+
+> bmSize = _width\_x\_length_;
+
+> emSize = _width\_x\_height_;
+
+> directive = _rule_;
+
+> option = _layerindex_/Stacked-_displacement_;
+
+}
+
+### Parameters
+
+**nLayers**: The number of layers in the barrel (see _Barrel_ block parameters). _Mandatory_.
+
+**nModules**: The number of modules along a barrel rod (see _Barrel_ block parameters). _Mandatory_.
+
+**nDisks**: The number of endcap discs in z+ (see _Endcap_ block parameters). _Optional_ in the sense that skipping this parameter defines a pixel geometry _without endcaps_.
+
+**etaCut**: See _Tracker_ block parameter list for a description. _Mandatory_.
+
+**innerRadius**: See _Endcap_ block parameter list for a description. _Mandatory_ if the geometry includes an endcap.
+
+**outerRadius**: See _Barrel_ and _Endcap_ block parameters list for a description. _Mandatory_.
+
+**phiSegments**: See _Barrel_ or _Endcap_ block parameter list for a description. _Optional_; the _default value is **4**_.
+
+**barrelGap**: See _Endcap_ block parameter list for a description. _Mandatory_ if the geometry includes an endcap.
+
+**maximumZ**: See _Endcap_ block parameter list for a description. _Mandatory_ if the geometry includes an endcap.
+
+**diskParity**: See _Endcap_ block parameter list for a description. _Mandatory_ if the geometry includes an endcap.
+
+**bmSize**: The width and length of a barrel module, _in millimetres_. See the _size_ parameter for the _Barrel_ block for a more detailed description. _Mandatory_.
+
+**emSize**: The width and height of an endcap module, _in millimetres_. See the _size_ parameter for the _Barrel_ block for a more detailed description. _Mandatory_ if the geometry includes an endcap.
+
+**directive**: This option combines those of the same name as described in the _Barrel_ and _Endcap_ parameter lists. The parser determines which part it refers to based on the syntax, which is different for barrels and endcaps. See the _Barrel_ and _Endcap_ parameter lists for details about both. _Optional_.
+
+**option**: See _Barrel_ block parameter list for a description. _Optional_.
+
+
+---
+
+
+[Up to top](ConfigFilesOverview#Configuration_Files_in_tkgeometry_and_tkmaterial.md)
+
+[Down to settings file](ConfigFilesOverview#The_Settings_File.md)
+
+[Down to material file](ConfigFilesOverview#The_Material_File.md)
+
+[Down to global material list](ConfigFilesOverview#The_Global_Material_List.md)
+
+
+---
+
+
+---
+
+
+# The Settings File
+
+Settings files are also structured as a series of blocks, in the same way as geometry configuration files. The block syntax is very similar as well, with keywords at the start indicating the type of block and curly braces and semicolons used as delimiters for parsing.
+
+Each named block in the settings file _must_ correspond to a named block in the geometry configuration file. That is not to say, though, that each named block in the geometry configuration file must have a corresponding block in the settings file as well. Named blocks in the settings file are only necessary if they describe a setup that is different from the default - if it isn't, the application will not go looking for settings that aren't there.
+
+As in geometry configuration files, numeric values indicating sizes are in _mm_ unless specified explicitly. _Indices (barrel, layer, position, ring or disc) always start at 1 as well._
+
+## _BarrelType_ Block
+
+Essentially, _BarrelType_ blocks describe the modules that a barrel is built of in more detail. They don't know anything about where those modules are located in space, but they specify how they are subdivided in terms of channels, whether the modules of a given layer are single- or double-sided, and, if so, how far the two sensors are apart.
+
+All of these indications are stated _per layer_ and, on occasion, _position_. They need not be stated for every layer in the barrel, just for those that are different from the default values as far as channels and module type are concerned. A _layer_, _position_ pair refers to the modules in one specific layer, at a specific position along a rod. (The lower indices are those closer to z=0.) If settings for a _layer_, _position_ pair are specified, they override those for the rest of the layer in the given position. If no other settings are specified for that layer, they simply override the default values at that position.
+
+If parameters are declared for one of the layers, there's a certain number of them that must be listed in a sort of all-or-nothing scheme. Those are labelled as _mandatory_ in the detailed parameter list below. If the layer is a default one, _none_ of the parameters are necessary, not even those that would be mandatory otherwise.
+
+_The name of a_BarrelType_block must much up with that of a_Barrel_block in the geometry configuration file._
+
+_BarrelType_ block generally look somewhat similar to this one:
+
+BarrelType _barrelname_ {
+
+> nStripsAcross`[`_layerindex_`]` = _value_;
+
+> nSegments`[`_layerindex_`]` = _value_;
+
+> nSides`[`_layerindex_`]` = _value_;
+
+> type`[`_layerindex_`]` = _value_;
+
+> dsDistance`[`_layerindex_`]` = _value_;
+
+> dsRotation`[`_layerindex_`]` = _value_;
+
+> nStripsAcross`[`_layerindex_, _position_`]` = _value_;
+
+> nSegments`[`_layerindex_, _position_`]` = _value_;
+
+> nSides`[`_layerindex_, _position_`]` = _value_;
+
+> type`[`_layerindex_, _position_`]` = _value_;
+
+> dsDistance`[`_layerindex_, _position_`]` = _value_;
+
+> dsRotation`[`_layerindex_, _position_`]` = _value_;
+
+> ...
+
+}
+
+### Parameters
+
+**nStripsAcross**: The number of strip channels across a module. The _default is **512**_. Mandatory, _must be a multiple of **128**, should be a multiple of **256**._
+
+**nSegments**: The number of strip segments along a module. The _default is **1**_. Mandatory.
+
+**nSides**: The number of sensor surfaces in the modules: **1** for _rphi_ or other single-sided modules, **2** for _pt_, _stereo_ or other double-sided ones. The _default is **1**_. Mandatory, directly coupled to _type_.
+
+**type**: The module type of the indicated layer. Typically one of the strings _rphi_, _pt_ or _stereo_, but it can be any string value as long as the type is consistent with those declared in the materials file. The _default is rphi_. Mandatory, directly coupled to _nSides_.
+
+**dsDistance**: The _surface-to-surface_ distance of the two sensors in double-sided modules. If left unspecified, a _default value of **0.0**_ is used. Only necessary if _type_ is either _pt_, _stereo_, or a _user-defined double-sided_ one.
+
+**dsRotation**: The rotation angle _in degrees_ of one sensor against the other in double-sided modules. If left unspecified, a _default value of **0.0**_ is used. Only necessary if _type_ is _stereo_ or a _user-defined double-sided_ one where _one of the two sensors is rotated_ by a certain angle with respect to the other.
+
+
+
+---
+
+
+## _EndcapType_ Block
+
+_EndcapType_ blocks are very similar to _BarrelType_ blocks - not surprising given that they both describe the same sort of module settings. The main thing to keep in mind for them is that single indices _always refer to rings_ while pair indices refer to _ring first, disc second_.
+
+Settings for indices that go beyond the available ring range are ignored. _The name of an_EndcapType_block must much up with that of an_Endcap_block in the geometry configuration file._
+
+Here's an overwiew of what _EndcapType_ blocks should look like:
+
+EndcapType _endcapname_ {
+
+> nStripsAcross`[`_ringindex_`]` = _value_;
+
+> nSegments`[`_ringindex_`]` = _value_;
+
+> nSides`[`_ringindex_`]` = _value_;
+
+> type`[`_ringindex_`]` = _value_;
+
+> dsDistance`[`_ringindex_`]` = _value_;
+
+> dsRotation`[`_ringindex_`]` = _value_;
+
+> nStripsAcross`[`_ringindex, discindex_`]` = _value_;
+
+> nSegments`[`_ringindex, discindex_`]` = _value_;
+
+> nSides`[`_ringindex, discindex_`]` = _value_;
+
+> type`[`_ringindex, discindex_`]` = _value_;
+
+> dsDistance`[`_ringindex, discindex_`]` = _value_;
+
+> dsRotation`[`_ringindex, discindex_`]` = _value_;
+
+> ...
+
+}
+
+### Parameters
+
+**See _BarrelType_ block** for a description - they're all the same.
+
+
+---
+
+
+## _Output_ Block
+
+The _Output_ block is an optional feature of the settings file: there is either _none_ or _exactly one_. If specified, it indicates the folder where the _tkLayout_ HTML summary will be stored. If not, the output folder name is built from the name of the layout.
+
+Note that all other output, namely that generated by _tkmaterial_ instead of _tkLayout_, is handled differently. In _tkmaterial_, output directories ar passed to the application on the command line. If none are listed, suitable default locations will be used.
+
+Output {
+
+> Path = _path_;
+
+}
+
+### Parameters
+
+**Path**: An absolute or relative output path. It need not exist beforehand.
+
+## _PixelType_ Block
+
+The _PixelType_ block is the companion piece that goes with the _Pixel_ block in the geometry file, and is just as optional. Note, though, that it **has to be there** if a _Pixel_ block defines a pixel detector elsewhere.
+
+For the most part, the syntax and semantics of its parameters are exactly the same as for those related to the tracker. The most important restriction is this: _the entire pixel detector is defined as having only modules of a single type_.
+
+PixelType {
+
+> type = _value_;
+
+> nSides = _value_;
+
+> nStripsAcross = _value_;
+
+> nSegments = _value_;
+
+> dsDistance = _value_;
+
+> dsRotation = _value_;
+
+> precisionRho = _value_;
+
+> precisionZ = _value_;
+
+}
+
+### Parameters
+
+**See _BarrelType_ block** for a description of all but the last couple - they're exactly the same. The remaining two are the following:
+
+**precisionRho**: This sets one of the measurement error of the module explicitly, replacing the one that was previously calculated from the module properties. Namely, it sets the error with respect to the strip pitch. _Mandatory_ - if it is omitted, the precision will be set to zero.
+
+**precisionZ**: As with _precisionRho_, this sets another measurement error of the module explicitly. This time, it is the error with respect to the strip length. _Mandatory_ - if it is omitted, the precision will be set to zero.
+
+
+---
+
+
+[Up to top](ConfigFilesOverview#Configuration_Files_in_tkgeometry_and_tkmaterial.md)
+
+[Up to geometry configuration file](ConfigFilesOverview#The_Geometry_Configuration_File.md)
+
+[Down to material file](ConfigFilesOverview#The_Material_File.md)
+
+[Down to global material list](ConfigFilesOverview#The_Global_Material_List.md)
+
+
+---
+
+
+---
+
+
+# The Material File
+
+Once all modules in a tracker layout are in place and all services and support structures have been built around them, the material file tells the application what the volumes are actually made of. Essentially, it is a long list of material descriptors and amounts, grouped in a number of categories.
+
+The syntax of a material file is different to that of the geometry and settings files. Information is parsed _per line_, most lines must end in a semicolon. Curly braces are not used to encapsulate blocks since the information is not grouped by barrel or endcap, but in a more general way. Whitespace does matter in the sense that it is often used to separate the different parts of an entry and should not be missing completely in those places.
+
+The amount of material listed on a line can be one of four different units. Internally, everything is _converted to grammes_ from the given unit and the size of the volume if necessary. The following explains how each of the units is interpreted when the material is assigned:
+  * **g**: The amount is added to _all_ volumes in the category _unchanged_. This is the _default_ - if no unit is given for an entry, the application assumes grammes.
+  * **mm**: A thickness is typically used for the sensors. Depending on whether the material is in a _barrel_ or on an _endcap_, this value is interpreted as being either _vertical_ or _horizontal_. If it is in any of the inactive surfaces, that surface's _isVertical_ flag is used to determine the most sensible orientation of the volume thickness.
+  * **g/m**: This unit is most appropriate for things like copper cables or tubes - which is why it's most common when describing services. As with _mm_, the _orientation of the volume_ determines whether the final length of material is interpreted as being laid out horizontally or vertically. _Unlike_ millimetres, though, the orientation of the material is _aligned_ with the volume orientation and _not_ at a right angle from it.
+  * **mm3**: The given volume is _converted to grammes_ using the density in the global materials list. The result is then added to _all_ volumes in the category _without further changes_.
+
+In order to model how material amounts propagate along a layer or disc and then out to the services, it is important to know if a material entry is entirely local to the volumes in the _active surfaces_ category or if it will have an impact on the amount of material present in the _services_ category. To this end, entries in some of the categories end with either **L** or **E**.
+
+**L** stands for _local_, **E** for _exiting_. Local materials are assigned to the volumes of the category itself, but they don't propagate out along the service volumes. Exiting materials do just that - the amount is added to the neighbouring service volume and to every other one that is connected to it directly or indirectly.
+
+Apart from type descriptions, all entries in a material configuration file start with a _marker_. This is a letter that puts the entry in one of the categories of _module_, one of the service types, or one of the support types.
+
+It may be worth noting that _material files are not tied to a specific tracker layout_. This means that as long as there are entries for all the necessary categories (as explained below), a material file can be _re-used for a different layout without modifications_.
+
+
+---
+
+
+## Modules
+
+The module section consists of type declarations and module materials. The type declaration, along with the default number of strips and segments per module, comes first. Any material listed afterwards is assumed to be part of the set for that type until a new type declaration changes this.
+
+### Types
+
+The type of a set of module materials is set using the _type_ keyword. It is followed by a default specification of the number of strips and segments. For the number of strips, the user must specify either numStripsAcross, either pitchEstimate. For the number of segments, the user must specify either numSegments, either stripLengthEstimate.
+
+type = _typename_
+
+numStripsAcross = _number_   (or pitchEstimate = _number_ )
+
+numSegments = _number_       (or stripLengthEstimate = _number_ )
+
+**type**: The type of module that the module materials that follow it refer to. Note that, for reasons of 'it seemed like a good idea at the time', _the_ type _keyword is the only keyword in the materials file that_ does not _end in a semicolon._ If you put a semicolon at the end of the line, it (and any whitespace between the name string and the semicolon) will be interpreted as part of the type name.
+
+Type declarations remain valid until they are reset by a new type keyword, once again followed by the default number of strips and segments for a module.
+
+_There is one exception to this_: as the _stereo_ standard double-sided type depends directly on its single-sided _rphi_ counterpart, a declaration of type _stereo must not_ give new default resolution values. They are the same as those of the _previously declared rphi_ standard single-sided type. Type _stereo_ is therefore an _extension_ of type _rphi_ and cannot exist without it.
+
+Apart from this exception, all type declarations are independent of each other. They can have any user-defined name, _as long as they are consistent_ with those type names that appear in the _settings file_. In other words, if it is listed in the settings file for a layer, ring, position or disc, it _must_ show up in the materials file as well. If it doesn't, those modules will have _no materials assigned to them._
+
+On the other hand, a type that is declared in the materials file and not used in the settings file has no consequences at all. It (and its material list) will be parsed and made available to the application, but not used any further.
+
+
+**numStripsAcross**: The number of strips across a default module of that type. This is used internally to scale the some of the material amounts in this file to that of the real module resolutions. So you're not indicating that all modules of this type have this many strips across (that happens in the settings file), but _how much material goes into a module of this default resolution_. 
+
+_Must be a multiple of **128**, should be a multiple of **256**._
+
+If numStripsAcross is specified in the cfg file by the user, then pitchEstimate is calculated internally with : pitchEstimate = width / numStripsAcross.
+
+
+**pitchEstimate**: An estimate of the pitch (local X axis) for a default module of that type.
+
+If pitchEstimate is specified in the cfg file by the user, then numStripsAcross is calculated internally as the closest integer to the double : width / pitchEstimate. 
+
+pitchEstimate is then updated accordingly.
+
+
+**numSegments**: The number of segments along a default module of that type. This is used internally to scale the some of the material amounts in this file to that of the real module resolutions. So once again, you're not indicating that all modules of this type have this many segments along (that also happens in the settings file), but _how much material goes into a module of this default resolution_. 
+
+Can be _any number greater than **0**._
+
+If numSegments is specified, then stripLengthEstimate is calculated internally with : stripLengthEstimate = length / numSegments.
+
+
+**stripLengthEstimate**: An estimate of the strip length (local Y axis) for a default module of that type.
+
+If stripLengthEstimate is specified in the cfg file by the user, then numSegments is calculated internally as the closest integer to the double : length / stripLengthEstimate. 
+
+stripLengthEstimate is then updated accordingly.
+
+
+### Materials
+
+Module materials are marked as such by the letter **M** at the beginning of the line. The _unique tag_ that identifies the material for lookup in the global material file comes next. They end with an **L/E** flag, followed by a semicolon.
+
+The interesting values are found between the tag and the _L/E_ flag. Internally, the total module material is calculated according to the rule
+
+**M<sub>tot</sub> = (n`*`m)`*`(p-1)`*`A + (n`*`m)`*`B + (p-1)`*`C + D**
+
+where _n_ is the _number of strips_, _m_ is the _number of segments_, and _p_ is the module _position on a rod_ or the _ring number_. So the four components _A, B, C_ and _D_ depend on the following factors:
+
+  * **A:** One of the so-called _travelling components_. On the one hand, the amount of material here depends on where along the rod or on which ring a module sits. The further out it is, the more material it inherits from those modules that are closer to the centre. On the other hand, the material assigned to this component will continue to travel outward until it reaches the layer-service boundary, where different conversion rules apply. Additionally, the final amount of material also scales with the granularity of the sensor surface, i.e. with the number of strips and segments. The specified amount refers to the _previously declared type default_ and will be scaled internally to the real module granularity.
+  * **B:** One of the so-called _local components_. This part does _not_ inherit or pass on anything, but it does scale up or down depending on how many strips and segments are found on the sensor surface. As for _A_, the specified amount refers to the _previously declared type default_ and will be scaled internally to the real module granularity.
+  * **C:** The second _travelling component_. As for component _A_, the amount of material here depends on the position of the module on a rod or on the ring. Unlike component _A_, the granularity of the sensor surface has no impact on the final amount of material: the same is inherited and passed on by _any_ module of this type and position, regardless of how its sensor surface is subdivided.
+  * **D:** The second _local component_. The most straightforward part of the four simply assigns a constant amount of material to every single tracker module that fits the type that this material declaration belongs to.
+
+So an entry for a module material looks like this:
+
+M _tag_ _amount`_`A_ _unit`_`A_ _amount`_`B_ _unit`_`B_ _amount`_`C_ _unit`_`C_ _amount`_`D_ _unit`_`D_ [L|E];
+
+**i.e.**
+
+M Cu 0 0 0.944 g 2.2 g E;
+
+or maybe
+
+M CF 0 0 0 2 mm L;
+
+All units are _optional_. If none is specified, the application assumes grammes.
+
+There are no restrictions with respect to what materials can be declared or how many times they appear on the list: internally, all materials will be grouped by module type first, then by _A_, _B_, _C_ and _D_ component and by _L/E_ flag. So putting, say, aluminium on the list twice, once to represent a cooling component and once to represent something else, causes no problems at all even if both entries are exactly the same.
+
+_There is one **important exception** to this rule, however._ If the goal is to export the finished tracker model to CMSSW XML files, it is _vital_ that the material for the sensor surfaces be declared as _SenSi_ rather than ordinary silicon _for every type that appears in the tracker_. If there is no entry tagged _SenSi_ in the material file, CMSSW _will crash_ trying to load or run something on the resulting XML files.
+
+
+
+### Resolution
+
+Resolution on pixel modules local coordinates X and Y are either nominal values, either values calculated from a parametrization.
+
+
+#### Nominal resolutionLocalX or Y
+
+Values for resolutionLocalX or Y are read from the cfg file. They are specified in mm.
+
+_Example : nominalResolutionLocalX 0.010_
+
+Please note that if no value nor any parameter is specified in the cfg file, nominal resolutionLocalX or Y is calculated using the following formulae :
+
+    nominalResolutionLocalX = RMS over sensors of (meanWidth / (numStripsAcross * sqrt(12)))
+    nominalResolutionLocalY = RMS over sensors of (length / (maxSegments * sqrt(12)))
+
+
+#### Parameterized resolutionLocalX or Y
+
+The set of parameters for resolutionLocalX or Y is read from the cfg file. 
+
+_Example : @includestd CMS_Phase2/Pixel/Resolutions/Barrel_100x100_
+
+Sets of parameters are available for the following module types :
+
+- Small Rectangular (25 um x 100 um)
+
+- Small Square      (50 um x 50 um)
+
+- Large Rectangular (50 um x 200 um)
+
+- Large Square      (100 um x 100 um)
+
+Models used are from [1].
+
+_**Barrel PXB :**_
+
+If parameters to calculate resolutionLocalXBarrel or resolutionLocalYBarrel are specified, the following models are used :
+
+Model for resolution on local X coordinate (barrel modules):
+
+    resolutionLocalXBarrel = resolutionLocalXBarrelParam0 + resolutionLocalXBarrelParam1 * cos(alpha) + resolutionLocalXBarrelParam2 * cos(alpha)^2
+
+Model for resolution on local Y coordinate (barrel modules):
+
+     resolutionLocalYBarrel = resolutionLocalYBarrelParam0 + resolutionLocalYBarrelParam1 * exp(-resolutionLocalYBarrelParam2 * abs(cos(beta))) * sin(resolutionLocalYBarrelParam3 * abs(cos(beta)) + resolutionLocalYBarrelParam4)
+
+With alpha and beta the reference notation angles for a track hitting a pixel module, as mentioned in [1].
+
+_**Endcap PXE :**_
+
+If parameters to calculate resolutionLocalXEndcap or resolutionLocalYEndcap are specified, the following models are used :
+
+Model for resolution on local X coordinate (endcap modules):
+
+    resolutionLocalXEndcap = resolutionLocalXBarrelParam0 + resolutionLocalXBarrelParam1 * cos(alpha)
+
+Model for resolution on local Y coordinate (endcap modules):
+
+    resolutionLocalYEndcap = resolutionLocalYBarrelParam0 + resolutionLocalYBarrelParam1 * abs(cos(beta))
+With alpha and beta the reference notation angles for a track hitting a pixel module, as mentioned in [1].
+
+    [1] Parametrization of the spatial resolution of the reconstructed hits in the Inner Pixel for HL-LHC studies, E. Migliore and M. Musich, 2015/09/18
+
+#### N.B.
+
+Please note that resolutionLocalX and Y can be both nominal, both parametrized, or each of a kind.
+
+---
+
+
+## Services
+
+Materials that are part of the service volumes come in two different flavours. The first is very simple - it describes a material that is local to the service volumes and doesn't propagate anywhere else. The second is a _mapping_ from an amount of material in the last (outmost) module of a barrel or disc to another amount of material in the neighbouring service volume.
+
+Materials that are local to the service volumes (same amount in all of them) are called _static_ materials. Their _line marker_ within the materials file is **S**.
+
+The syntax of a static service material entry is very simple: no channel-dependent or travelling parts, no **L** or **E** marker at the end. Just the following information:
+
+_marker materialname amount unit_; **i.e.** S CF 4 mm;
+
+As always, the unit is optional and defaults to grammes. If it is a different one, the amount of material will be scaled depending on the size of the service volume.
+
+The mapping from active surfaces to services is a bit more complicated. An entry starts with the marker **D** and ends with an **E** or **L** marker (and a semicolon). In between, it lists _two quantities_ - the first an amount of a material in the active surfaces, the second what this amount _translates to_ within the adjacent service volume.
+
+The two materials that make up the mapping may be the same with different quantities, different materials but the same quantity, both exactly the same or both completely different. The units don't need to match either - undeclared units default to grammes, even if one of them is specified as being something else.
+
+The **L/E** marker has the same function as in the entries for module materials. An **L** causes the mapped material to stay local to the first service volume, an **E** will make sure it is propagated along the connected services and out of the tracker.
+
+To summarise, an entry for a mapping at the module-service boundary consists of the following elements:
+
+_marker amount unit tag amount unit tag l-eflag;_
+
+In other words (and as an example):
+
+D 1 g Cu 10 g/m Cu E;
+
+meaning that for every gramme of copper in the last active surfaces on the rods, there will be 10g/m of copper in the adjacent service volume that propagate out along the other services.
+
+
+---
+
+
+## Supports
+
+Since support materials have no exiting elements by definition, they are listed in the same way as the static materials for services: a marker, a name tag, an amount and a unit, followed by a semicolon. There are five different markers for _five different subcategories_ of support structures:
+  * **V**: Barrel support tubes
+  * **W**: User-defined barrel supports
+  * **X**: Barrel support discs
+  * **Y**: Endcap supports
+  * **Z**: Outer support tube
+
+So apart from the marker, an entry looks the same as for static service materials:
+
+_marker materialname amount unit_; **i.e.** X CF 2.5 mm;
+
+
+---
+
+
+[Up to top](ConfigFilesOverview#Configuration_Files_in_tkgeometry_and_tkmaterial.md)
+
+[Up to geometry configuration file](ConfigFilesOverview#The_Geometry_Configuration_File.md)
+
+[Up to settings file](ConfigFilesOverview#The_Settings_File.md)
+
+[Down to global material list](ConfigFilesOverview#The_Global_Material_List.md
